@@ -8,6 +8,11 @@ To remove `work-profile` and `aws-credentials` from being tracked on git. run th
 git update-index --assume-unchanged ./files/work-profile ./files/aws-credentials
 ```
 
+## vim
+Run `./install-vim.sh` to only install the vim portion of the files
+* (main inspiration)[https://blog.jez.io/vim-as-an-ide/]
+* (markdown syntax)[https://github.com/sheerun/vim-polyglot]
+* (polyglot syntax library)[https://github.com/gabrielelana/vim-markdown]
 
 ## GPG Signing
 

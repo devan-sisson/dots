@@ -40,12 +40,12 @@ if ! file_exists .gitconfig-work ; then
   link_dot_file gitconfig-work
 fi
 
-if ! file_exists .editorconfig ; then
-  link_dot_file editorconfig
+if ! file_exists .vimrc ; then
+  link_dot_file vimrc
 fi
 
-if ! file_exists .eslintrc ; then
-  link_dot_file eslintrc
+if ! file_exists .editorconfig ; then
+  link_dot_file editorconfig
 fi
 
 if ! file_exists .prettierrc ; then
@@ -60,4 +60,9 @@ fi
 if ! file_exists .aws/credentials ; then
   print "Linking aws creds"
   ln -s $PWD/files/aws-credentials $HOME/.aws/credentials
+fi
+
+if [ is_ubuntu ] ; then
+  print "linking VTE in ubuntu"
+  ln -s /etc/profile.d/vte-2.91.sh /etc/profile.d/vte.sh
 fi

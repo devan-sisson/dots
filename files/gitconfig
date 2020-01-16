@@ -5,27 +5,22 @@
   la = !git lg --all
 #[remote "origin"]
 #  fetch = +refs/pull/*/head:refs/remotes/origin/pr/*
-[merge]
-  tool = p4merge
-[mergetool "p4merge"]
-  cmd = /Applications/p4merge.app/Contents/MacOS/p4merge "$BASE" "$LOCAL" "$REMOTE" "$MERGED"
-[mergetool]
-  keepTemporaries = false
-  trustExitCode = false
-  keepBackup = false
-  prompt = false
-[commit]
-  gpgsign = true
+# [merge]
+#   tool = p4merge
+# [mergetool "p4merge"]
+#   cmd = /Applications/p4merge.app/Contents/MacOS/p4merge "$BASE" "$LOCAL" "$REMOTE" "$MERGED"
+# [mergetool]
+#   keepTemporaries = false
+#   trustExitCode = false
+#   keepBackup = false
+#   prompt = false
+# [commit]
+#   gpgsign = true
 
 [user]
-  name = Colten Rouska
-  email = crouska@gmail.com
-  signingkey = F5C4A8AEAA463AD9879DB149F82640A0AEC7A210
+	name = Devan Sisson
+  email = devanslink@gmail.com
+# signingkey = F5C4A8AEAA463AD9879DB149F82640A0AEC7A210
 
-[includeIf "gitdir:~/git/vs/**"]
+[includeIf "gitdir:~/git/work/**"]
   path = ~/.gitconfig-work
-
-[includeIf "gitdir:~/git/workout/**"]
-  name = Colten Rouska
-  email = crouska@gmail.com
-  signingkey = F5C4A8AEAA463AD9879DB149F82640A0AEC7A210

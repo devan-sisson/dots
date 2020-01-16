@@ -21,6 +21,10 @@ echo "installing mac settings"
 sh $PWD/scripts/mac-settings.sh
 clear
 
+echo "installing vim settings"
+sh $PWD/scripts/vim.sh
+clear
+
 echo "Setting up npm"
 sh $PWD/scripts/npm.sh
 clear

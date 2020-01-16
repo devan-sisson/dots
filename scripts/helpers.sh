@@ -23,6 +23,30 @@ directory_exists(){
   fi
 }
 
+is_mac(){
+  if [uname "Darwin"] ;  then
+    true
+  else
+    false
+  fi
+}
+
+is_linux(){
+  if [uname "Linux"] ;  then
+    true
+  else
+    false
+  fi
+}
+
+is_ubuntu(){
+  if [[ $(uname -v) =~ ((u|U)buntu) ]] ;  then
+    true
+  else
+    false
+  fi
+}
+
 update_gitrepo() {
   local name=$(basename $1)
   echo "Would you like to update $name (Y/n)?"
