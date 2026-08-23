@@ -7,7 +7,7 @@ brew=/opt/homebrew/bin/brew
 cache_dir="$HOME/.cache/dot-brew"
 summary="$cache_dir/summary.txt"
 last_upgrade="$cache_dir/last-upgrade"
-upgrade_interval_days=7
+upgrade_interval_days=1
 
 mkdir -p "$cache_dir"
 

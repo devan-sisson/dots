@@ -8,12 +8,27 @@ last_upgrade="$cache_dir/last-upgrade"
 
 mkdir -p "$cache_dir"
 
-min_interval_days=6
-last=$(cat "$last_upgrade" 2>/dev/null || echo 0)
+min_interval_days=1
 now=$(date +%s)
-if [ $((now - last)) -lt $((min_interval_days * 86400)) ]; then
-  echo "Skipping: last upgrade was less than ${min_interval_days} days ago"
+
+# Single-instance lock. mkdir is atomic; the per-session hook + launchd agent
+# can overlap and multiple terminals can fire at once. Also closes the
+# check-then-write race on the throttle timestamp below.
+lock_dir="$cache_dir/lock"
+if [ -d "$lock_dir" ]; then
+  # Clear a stale lock left by a killed run (an upgrade never runs 2h).
+  age=$((now - $(stat -f %m "$lock_dir" 2>/dev/null || echo "$now")))
+  [ "$age" -ge 7200 ] && rmdir "$lock_dir" 2>/dev/null
+fi
+if ! mkdir "$lock_dir" 2>/dev/null; then
+  echo "Another brew-update is running; skipping"
   exit 0
+fi
+trap 'rmdir "$lock_dir" 2>/dev/null' EXIT
+
+last=$(cat "$last_upgrade" 2>/dev/null || echo 0)
+if [ $((now - last)) -lt $((min_interval_days * 86400)) ]; then
+  exit 0 # already ran today; silent so per-session nudges don't spam the log
 fi
 
 echo "Starting to update brew"

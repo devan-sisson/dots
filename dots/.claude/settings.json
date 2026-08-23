@@ -48,13 +48,19 @@
         "source": "github",
         "repo": "hyperb1iss/moonrepo-skill"
       }
+    },
+    "simple-english": {
+      "source": {
+        "source": "github",
+        "repo": "AminBlg/SimpleEnglish"
+      }
     }
   },
   "advisorModel": "opus",
-  "theme": "dark",
   "tui": "fullscreen",
   "skipWorkflowUsageWarning": true,
+  "theme": "dark",
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "model": "opus[1m]"
+  "useAutoModeDuringPlan": true,
 }
