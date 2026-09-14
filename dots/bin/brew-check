@@ -7,7 +7,8 @@ brew=/opt/homebrew/bin/brew
 cache_dir="$HOME/.cache/dot-brew"
 summary="$cache_dir/summary.txt"
 last_upgrade="$cache_dir/last-upgrade"
-upgrade_interval_days=1
+# Hours com.rizowski.brew-upgrade fires at; keep in sync with the plist.
+upgrade_hours=(18 20 22)
 
 mkdir -p "$cache_dir"
 
@@ -23,13 +24,30 @@ fi
 
 last=$(cat "$last_upgrade" 2>/dev/null || echo 0)
 now=$(date +%s)
-next=$((last + upgrade_interval_days * 86400))
 
-if [ "$next" -le "$now" ]; then
-  when="on next scheduled run (overdue)"
-else
-  when=$(date -r "$next" "+%a %b %d %H:%M")
+# Earliest moment an upgrade is allowed again: not before tomorrow if one
+# already ran today, and pushed out further by a "Later" answer.
+due=$now
+if [ "$last" -gt 0 ] && [ "$(date -r "$last" +%Y%m%d)" = "$(date +%Y%m%d)" ]; then
+  due=$(date -v+1d -v0H -v0M -v0S +%s)
 fi
+defer_until=$(cat "$cache_dir/defer-until" 2>/dev/null || echo 0)
+[ "$defer_until" -gt "$due" ] && due=$defer_until
+
+# ...then round up to the next slot the launchd agent actually fires on.
+next=0
+for day_offset in 0 1; do
+  day=$(date -r "$due" -v+${day_offset}d +%Y-%m-%d)
+  for hour in "${upgrade_hours[@]}"; do
+    slot=$(date -j -f "%Y-%m-%d %H:%M:%S" "$day $hour:00:00" +%s)
+    if [ "$slot" -ge "$due" ]; then
+      next=$slot
+      break 2
+    fi
+  done
+done
+
+when=$(date -r "$next" "+%a %b %d %H:%M")
 
 {
   printf '== brew: %d outdated ==\n' "$count"

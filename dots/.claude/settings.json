@@ -1,5 +1,4 @@
 {
-  "useAutoModeDuringPlan": true,
   "permissions": {
     "defaultMode": "plan"
   },
@@ -22,7 +21,8 @@
     "terraform@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
-    "moonrepo@hyperb1iss-skills": true
+    "moonrepo@hyperb1iss-skills": true,
+    "simple-english@simple-english": true
   },
   "extraKnownMarketplaces": {
     "anthropic-agent-skills": {

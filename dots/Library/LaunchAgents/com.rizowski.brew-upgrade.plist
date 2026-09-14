@@ -8,12 +8,32 @@
   <array>
     <string>/bin/sh</string>
     <string>-lc</string>
-    <string>mkdir -p "$HOME/.cache/dot-brew" &amp;&amp; exec "$HOME/bin/brew-update" &gt;&gt;"$HOME/.cache/dot-brew/upgrade.log" 2&gt;&amp;1</string>
+    <string>mkdir -p "$HOME/.cache/dot-brew" &amp;&amp; exec "$HOME/bin/brew-update" --ask &gt;&gt;"$HOME/.cache/dot-brew/upgrade.log" 2&gt;&amp;1</string>
   </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>StartInterval</key>
-  <integer>86400</integer>
+  <!-- 18:00 is the real slot; 20:00 and 22:00 are retries for a "Later" defer.
+       brew-update throttles itself to one upgrade a day, so extra fires are
+       cheap no-ops. Keep in sync with upgrade_hours in bin/brew-check. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict>
+      <key>Hour</key>
+      <integer>18</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>20</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>22</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+  </array>
   <key>ProcessType</key>
   <string>Background</string>
 </dict>

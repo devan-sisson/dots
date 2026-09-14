@@ -1,14 +1,41 @@
 #!/bin/bash
+# Homebrew updater. Modes:
+#   brew-update              full run (formulae + casks), silent
+#   brew-update --no-casks   formulae only; used by the per-shell nudge
+#   brew-update --ask        full run, but ask first if someone is at the keyboard
+# Each mode throttles itself to once a day. --ask also honours a "Later" defer.
 
 set -u
 
 brew=/opt/homebrew/bin/brew
 cache_dir="$HOME/.cache/dot-brew"
-last_upgrade="$cache_dir/last-upgrade"
+defer_file="$cache_dir/defer-until"
+defer_seconds=7200
 
 mkdir -p "$cache_dir"
 
-min_interval_days=1
+ask=0
+casks=1
+for arg in "$@"; do
+  case "$arg" in
+  --ask) ask=1 ;;
+  --no-casks) casks=0 ;;
+  *)
+    echo "unknown option: $arg" >&2
+    exit 2
+    ;;
+  esac
+done
+
+# Separate stamps so a formula-only nudge never satisfies the cask schedule.
+if [ "$casks" -eq 1 ]; then
+  last_upgrade="$cache_dir/last-upgrade"
+  upgrade_args=()
+else
+  last_upgrade="$cache_dir/last-formula-upgrade"
+  upgrade_args=(--formula)
+fi
+
 now=$(date +%s)
 
 # Single-instance lock. mkdir is atomic; the per-session hook + launchd agent
@@ -26,10 +53,63 @@ if ! mkdir "$lock_dir" 2>/dev/null; then
 fi
 trap 'rmdir "$lock_dir" 2>/dev/null' EXIT
 
+# Throttle by calendar day rather than elapsed hours. A rolling 24h window
+# drifts past the fixed launchd slots (an 18:05 finish blocks the next 18:00)
+# and eventually skips a day outright.
 last=$(cat "$last_upgrade" 2>/dev/null || echo 0)
-if [ $((now - last)) -lt $((min_interval_days * 86400)) ]; then
+if [ "$last" -gt 0 ] && [ "$(date -r "$last" +%Y%m%d)" = "$(date +%Y%m%d)" ]; then
   exit 0 # already ran today; silent so per-session nudges don't spam the log
 fi
+
+# "Later" from an earlier prompt holds off the interactive run only.
+if [ "$ask" -eq 1 ]; then
+  defer_until=$(cat "$defer_file" 2>/dev/null || echo 0)
+  if [ "$now" -lt "$defer_until" ]; then
+    exit 0
+  fi
+fi
+
+# Ask before interrupting, but only when someone is actually logged in at the
+# console. An unattended machine (or a dialog that times out) upgrades silently.
+if [ "$ask" -eq 1 ] && [ "$(stat -f %Su /dev/console 2>/dev/null)" = "$USER" ]; then
+  "$brew" update >/dev/null 2>&1 || true
+  count=$("$brew" outdated --quiet 2>/dev/null | grep -c .)
+  if [ "$count" -eq 0 ]; then
+    date +%s >"$last_upgrade"
+    exit 0
+  fi
+
+  answer=$(/usr/bin/osascript <<APPLESCRIPT 2>/dev/null
+try
+  tell me to activate
+  set res to display dialog "Homebrew has $count update(s) ready." with title "Homebrew" buttons {"Skip today", "Later", "Install now"} default button "Install now" cancel button "Later" giving up after 120
+  if gave up of res then
+    return "timeout"
+  else
+    return button returned of res
+  end if
+on error number -128
+  return "Later"
+end try
+APPLESCRIPT
+  )
+
+  case "$answer" in
+  "Later")
+    echo "Deferred for $((defer_seconds / 3600))h"
+    echo $((now + defer_seconds)) >"$defer_file"
+    exit 0
+    ;;
+  "Skip today")
+    echo "Skipped for today"
+    date +%s >"$last_upgrade"
+    rm -f "$defer_file"
+    exit 0
+    ;;
+  esac
+fi
+
+rm -f "$defer_file"
 
 echo "Starting to update brew"
 "$brew" update
@@ -37,7 +117,7 @@ echo "Starting to update brew"
 echo "Upgrading outdated software"
 # Detach stdin so casks needing sudo fail fast under launchd (no TTY)
 # instead of hanging. Failures are re-reported in the next brew-check.
-"$brew" upgrade </dev/null # --greedy
+"$brew" upgrade ${upgrade_args[@]+"${upgrade_args[@]}"} </dev/null # --greedy
 
 echo "Cleaning up casks and brews"
 "$brew" cleanup --prune 25

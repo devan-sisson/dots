@@ -19,10 +19,11 @@ fpath=(/usr/local/share/zsh-completions $fpath)
 case $(uname) in
 Darwin)
   export PATH=/opt/whalebrew/bin:$PATH
-  # Nudge a throttled brew upgrade in the background on each new session.
-  # brew-update self-throttles (1/day) and locks, so firing often is cheap.
+  # Nudge a throttled, formula-only brew upgrade in the background on each new
+  # session. brew-update self-throttles (1/day) and locks, so firing often is
+  # cheap. Casks are left to the 18:00 launchd agent, which asks first.
   [ -x "$HOME/bin/brew-update" ] &&
-    ("$HOME/bin/brew-update" </dev/null >>"$HOME/.cache/dot-brew/upgrade.log" 2>&1 &)
+    ("$HOME/bin/brew-update" --no-casks </dev/null >>"$HOME/.cache/dot-brew/upgrade.log" 2>&1 &)
   ;;
 esac
 
