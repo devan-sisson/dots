@@ -83,6 +83,108 @@ fmt_countdown() {
   printf '%s' "${c}(${t})${RST}"
 }
 
+# ---------------------------------------------------------------- team usage
+# Org overage spend (extra_usage) from the claude.ai usage endpoint. Not in the
+# statusline payload, so we fetch it ourselves: at most once per ORG_TTL, always
+# in the background, and always render from cache so a 1s refresh never blocks.
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/claude-statusline"
+ORG_CACHE="$CACHE_DIR/org-usage.json"
+ORG_STAMP="$CACHE_DIR/org-usage.attempt"
+ORG_LOCK="$CACHE_DIR/org-usage.lock"
+ORG_TTL=300
+
+file_mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }
+
+# True only when this account belongs to an org with extra usage enabled.
+# ~/.claude.json is small, so this is cheap enough to check on every render
+# rather than letting a cached answer go stale after a re-login.
+in_org() {
+  jq -e '.oauthAccount.organizationUuid and .oauthAccount.hasExtraUsageEnabled' \
+    "$HOME/.claude.json" >/dev/null 2>&1
+}
+
+org_usage_fetch() {
+  local tok tmp
+
+  tok=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
+        | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
+  [ -z "$tok" ] && return
+
+  tmp="$ORG_CACHE.$$"
+  # Token goes through a curl config on stdin, never argv (argv is world-readable in ps).
+  if printf 'header = "Authorization: Bearer %s"\nheader = "anthropic-beta: oauth-2025-04-20"\n' "$tok" \
+       | curl -sS --max-time 10 -K - --url "https://api.anthropic.com/api/oauth/usage" -o "$tmp" 2>/dev/null \
+     && jq -e 'type == "object"' "$tmp" >/dev/null 2>&1; then
+    mv -f "$tmp" "$ORG_CACHE"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+org_usage_refresh() {
+  mkdir -p "$CACHE_DIR" 2>/dev/null || return
+  local age=$ORG_TTL
+  [ -f "$ORG_STAMP" ] && age=$(( now - $(file_mtime "$ORG_STAMP") ))
+  [ "$age" -lt "$ORG_TTL" ] && return
+
+  # Clear a lock left behind by a killed refresh.
+  if [ -d "$ORG_LOCK" ] && [ $(( now - $(file_mtime "$ORG_LOCK") )) -gt 60 ]; then
+    rmdir "$ORG_LOCK" 2>/dev/null
+  fi
+  mkdir "$ORG_LOCK" 2>/dev/null || return
+
+  ( trap 'rmdir "$ORG_LOCK" 2>/dev/null' EXIT
+    touch "$ORG_STAMP"
+    org_usage_fetch
+  ) >/dev/null 2>&1 &
+  disown 2>/dev/null
+}
+
+render_org_usage() {
+  [ -f "$ORG_CACHE" ] || return
+  local enabled used_minor exp cur limit_minor pct capped amount c part
+  { read -r enabled
+    read -r used_minor
+    read -r exp
+    read -r cur
+    read -r limit_minor
+    read -r pct
+    read -r capped
+  } < <(jq -r '
+    (.spend.enabled // .extra_usage.is_enabled // false),
+    (.spend.used.amount_minor // .extra_usage.used_credits // ""),
+    (.spend.used.exponent // .extra_usage.decimal_places // 2),
+    (.spend.used.currency // .extra_usage.currency // "USD"),
+    (.spend.limit.amount_minor // ""),
+    (.spend.percent // .extra_usage.utilization // ""),
+    (.extra_usage.spend_limit_reached // false)
+  ' "$ORG_CACHE" 2>/dev/null)
+
+  [ "$enabled" = "true" ] || return
+  [ -n "$used_minor" ] || return
+
+  # Credits arrive in minor units (27173 + exponent 2 -> 271.73).
+  amount=$(awk -v m="$used_minor" -v e="$exp" \
+    'BEGIN { printf "%." e "f", m / (10 ^ e) }')
+  [ "$cur" = "USD" ] && amount="\$${amount}" || amount="${amount} ${cur}"
+
+  # A percentage is only meaningful when the org has a spend limit set;
+  # with no limit the endpoint reports percent 0 forever, so show spend alone.
+  if [ "$capped" = "true" ]; then
+    c="$RED"
+  elif [ -n "$limit_minor" ] && [ -n "$pct" ]; then
+    c=$(color_pct "$pct")
+  else
+    c="$GRN"
+  fi
+
+  part="${c}${amount}${RST}"
+  if [ -n "$limit_minor" ] && [ -n "$pct" ]; then
+    part="${part}${DIM}/$(printf '%.0f' "$pct")%${RST}"
+  fi
+  printf ' %b|%b team:%b' "$DIM" "$RST" "$part"
+}
+
 render_window() {
   local label="$1" pct="$2" resets_at="$3"
   [ -z "$pct" ] && return
@@ -144,6 +246,13 @@ fi
 
 out="${out}$(render_window 5h "$five_hour" "$five_hour_resets_at")"
 out="${out}$(render_window 7d "$seven_day" "$seven_day_resets_at")"
+
+if in_org; then
+  org_usage_refresh
+  out="${out}$(render_org_usage)"
+else
+  rm -f "$ORG_CACHE" 2>/dev/null
+fi
 
 if [ -n "$vim_mode" ]; then
   [ "$vim_mode" = "INSERT" ] && vc="$YEL" || vc="$BLU"
