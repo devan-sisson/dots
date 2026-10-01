@@ -27,6 +27,36 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 
 eval "$(zoxide init zsh)"
 
+# `z <partial><Tab>` offers the last path segment of every zoxide entry
+# (e.g. worktree names) alongside local directories.
+# Wraps zoxide's completion so `z foo <Space><Tab>` still opens its picker.
+_z_complete_names() {
+  __zoxide_z_complete
+  (( CURRENT == 2 && CURRENT == ${#words} )) || return
+  local -a names
+  names=(${(u)${(f)"$(zoxide query -l 2>/dev/null)"}:t})
+  compadd -J zoxide -X '%Bzoxide%b' -a names
+}
+compdef _z_complete_names z
+
+# A new shell that opens in a repo root follows a live Claude Code session into its
+# worktree. Written by ~/.claude/hooks/worktree-terminal-sync.sh, keyed by the
+# physical path. Skipped for `zsh -ic cmd` so scripted commands stay put.
+() {
+  [[ -z $ZSH_EXECUTION_STRING ]] || return
+  local d=~/.cache/claude-worktree-cwd/${${PWD:A}//\//%} f wt
+  [[ -d $d ]] || return
+  # One record per session, named by claude pid; newest live one wins.
+  for f in $d/*(N.om); do
+    wt=$(<$f)
+    if kill -0 ${f:t} 2>/dev/null && [[ -d $wt ]]; then
+      cd -- $wt
+      return
+    fi
+    rm -f -- $f
+  done
+}
+
 # OMZ libraries that the plugins/keybindings below depend on.
 zinit snippet OMZL::git.zsh
 zinit snippet OMZL::key-bindings.zsh
@@ -124,5 +154,7 @@ aws_auto_profile_hook() {
 
 add-zsh-hook chpwd aws_auto_profile_hook &&
   aws_auto_profile_hook
+
+command -v conda >/dev/null && eval "$(conda shell.zsh hook)"
 
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
