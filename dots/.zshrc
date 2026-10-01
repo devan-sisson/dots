@@ -9,31 +9,21 @@ source "$ZINIT_HOME/zinit.zsh"
 autoload -Uz _zinit
 (( ${+_comps} )) && _comps[zinit]=_zinit
 
-case $(uname) in
-Darwin)
-  eval "$(rbenv init - zsh)"
-  HB_CNF_HANDLER="$HOMEBREW_PREFIX/Homebrew/Library/Taps/homebrew/homebrew-command-not-found/handler.sh"
+# command-not-found (pkgfile on Arch, Homebrew's handler elsewhere) comes from
+# the OMZP::command-not-found snippet below.
+if [[ $(uname) == Darwin ]]; then
   test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
-  ;;
-Linux)
-  # Arch/CachyOS: pkgfile provides command-not-found (installed via
-  # packages/pacman.txt). Fall back to the brew handler on Ubuntu-linuxbrew.
-  if [ -f /usr/share/doc/pkgfile/command-not-found.zsh ]; then
-    HB_CNF_HANDLER="/usr/share/doc/pkgfile/command-not-found.zsh"
-  else
-    HB_CNF_HANDLER="$HOMEBREW_PREFIX/Homebrew/Library/Taps/homebrew/homebrew-command-not-found/handler.sh"
-  fi
-  ;;
-esac
-
-if [ -f "$HB_CNF_HANDLER" ]; then
-  source "$HB_CNF_HANDLER"
 fi
+# rbenv is installed on macOS (Brewfile) and Arch (packages/pacman.txt).
+command -v rbenv >/dev/null && eval "$(rbenv init - zsh)"
 
 autoload -U colors && colors
 autoload -Uz compinit && compinit
 autoload -U +X bashcompinit && bashcompinit
 autoload -Uz add-zsh-hook
+
+# who cares about casing? I don't
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 
 eval "$(zoxide init zsh)"
 
@@ -73,9 +63,8 @@ FAST_HIGHLIGHT_STYLES[unknown-token]=fg=red,bold
 HISTFILE=~/.zsh_history
 HISTSIZE=100000
 SAVEHIST=100000
-setopt SHARE_HISTORY       # global: all sessions share one history, live
+setopt SHARE_HISTORY       # global: all sessions share one history, live (implies incremental append)
 setopt EXTENDED_HISTORY    # record timestamps
-setopt INC_APPEND_HISTORY
 setopt HIST_FIND_NO_DUPS
 setopt HIST_IGNORE_DUPS
 setopt AUTO_CD             # bare paths like ../../ cd instead of trying to exec
@@ -88,13 +77,16 @@ eval "$(starship init zsh)"
 # Must come after atuin init so it isn't overridden.
 bindkey '^[[A' history-substring-search-up
 bindkey '^[[B' history-substring-search-down
+# OMZL::key-bindings enables application mode (smkx), where arrows send ^[OA/^[OB.
+[[ -n ${terminfo[kcuu1]} ]] && bindkey "${terminfo[kcuu1]}" history-substring-search-up
+[[ -n ${terminfo[kcud1]} ]] && bindkey "${terminfo[kcud1]}" history-substring-search-down
 
 # source ~/.config/op/plugins.sh
 source ~/.aliases
 
 # rbenv/ruby-build openssl hint (macOS/Ubuntu-brew only; Arch finds it natively).
-if command -v brew >/dev/null 2>&1; then
-  export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl@3)"
+if [ -n "$HOMEBREW_PREFIX" ]; then
+  export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$HOMEBREW_PREFIX/opt/openssl@3"
 fi
 
 # [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
@@ -105,12 +97,18 @@ export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";
 
 # Added by GitButler installer
 export PATH="$HOME/.local/bin:$PATH"
-eval "$(but completions zsh)"
+command -v but >/dev/null && eval "$(but completions zsh)"
 
 aws_auto_profile_hook() {
+  local file profile
   file=$(upfind .aws-profile)
 
-  [[ -z "$file" ]] && unset AWS_PROFILE && return
+  if [[ -z "$file" ]]; then
+    # Only clear a profile this hook set; leave a manually exported one alone.
+    [[ -n "$_aws_auto_profile" && "$AWS_PROFILE" == "$_aws_auto_profile" ]] && unset AWS_PROFILE
+    unset _aws_auto_profile
+    return
+  fi
 
   profile=$(cat "$file")
 
@@ -121,6 +119,7 @@ aws_auto_profile_hook() {
   fi
 
   export AWS_PROFILE="$profile"
+  _aws_auto_profile="$profile"
 }
 
 add-zsh-hook chpwd aws_auto_profile_hook &&

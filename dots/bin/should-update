@@ -23,7 +23,7 @@ declare -i been
 
 if (($been >= $updateDays)); then
   if read -p "Do you want to run $app? (Y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
-    sh -c $script
+    sh -c "$script"
   fi
   set_ran_date "$settingsPath"
 fi

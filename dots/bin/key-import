@@ -1,7 +1,8 @@
 #!/bin/bash
 
 gpg --list-secret-keys --keyid-format LONG
-sudo chown -R $(whoami) ~/.gnupg
-chmod 600 ~/.gnupg/*
-chmod 700 ~/.gnupg
+sudo chown -R "$(whoami)" ~/.gnupg
+# Files 600, directories 700 (gpg-agent needs +x on private-keys-v1.d etc).
+find ~/.gnupg -type f -exec chmod 600 {} +
+find ~/.gnupg -type d -exec chmod 700 {} +
 keybase pgp export

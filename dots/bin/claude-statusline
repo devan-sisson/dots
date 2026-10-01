@@ -208,16 +208,16 @@ render_window() {
   printf ' %b|%b %s' "$DIM" "$RST" "$part"
 }
 
-cwd="${cwd/#$HOME\/git\//}"
-cwd="${cwd/#$HOME/~}"
-
+# Look up the branch from the full path, before it's shortened for display.
 branch=""
 if [ -n "$worktree_branch" ]; then
   branch="$worktree_branch"
 elif [ -n "$cwd" ]; then
-  real="${cwd/#\~/$HOME}"
-  branch=$(git -C "$real" symbolic-ref --short HEAD 2>/dev/null || git -C "$real" rev-parse --short HEAD 2>/dev/null)
+  branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null || git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
 fi
+
+cwd="${cwd/#$HOME\/git\//}"
+cwd="${cwd/#$HOME/~}"
 
 wt=""
 if [[ "$cwd" == */.claude/worktrees/* ]]; then

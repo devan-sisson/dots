@@ -37,3 +37,7 @@ export PATH="/usr/local/sbin:$PATH"
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
 [ -f "$HOME/.zshenv.local" ] && source "$HOME/.zshenv.local"
+
+# macOS login shells run path_helper (/etc/zprofile) after this file, which moves
+# /usr/bin ahead of everything above. .zprofile restores this order from here.
+_dots_zshenv_path=$PATH

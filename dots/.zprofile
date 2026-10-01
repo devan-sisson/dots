@@ -2,13 +2,17 @@
 # https://github.com/keybase/keybase-issues/issues/1712#issuecomment-141226705
 export GPG_TTY=$(tty)
 
+# Undo path_helper's reordering: put .zshenv's PATH back in front (first copy wins).
+if [ -n "$_dots_zshenv_path" ]; then
+  typeset -U path
+  path=(${(s.:.)_dots_zshenv_path} $path)
+  unset _dots_zshenv_path
+fi
+
 # set PATH so it includes user's private bin if it exists
 if [ -d "$HOME/bin" ]; then
   PATH="$HOME/bin:$PATH"
 fi
-
-# who cares about casing? I don't
-set completion-ignore-case on
 
 [ -s "$HOME/.cache/dot-brew/summary.txt" ] && cat "$HOME/.cache/dot-brew/summary.txt"
 
@@ -28,7 +32,3 @@ Darwin)
 esac
 
 [ -f "$HOME/.zprofile.local" ] && source "$HOME/.zprofile.local"
-
-
-# added by Snowflake SnowSQL installer v1.2
-export PATH=/Applications/SnowSQL.app/Contents/MacOS:$PATH

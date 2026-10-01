@@ -28,6 +28,9 @@ EOF
   esac
 done
 
+# Everything below uses repo-relative paths ($PWD/packages, dots/, ...).
+cd "$(dirname "$0")"
+
 echo "$OSTYPE $(uname)"
 
 # Emit a package list with comments and blank lines stripped.
@@ -134,14 +137,18 @@ install_apt() {
   # Debian/Ubuntu path — still Homebrew-backed for CLI tools.
   sudo apt update
   sudo apt upgrade -y
-  sudo apt install zsh podman -y
+  # build-essential/procps/curl/file/git are Homebrew-on-Linux prerequisites.
+  sudo apt install zsh podman build-essential procps curl file git -y
   sudo chsh -s "$(command -v zsh)" "$USER"
-  export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+  if [ ! -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  fi
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 }
 
 case $(uname) in
 Darwin)
-  xcode-select --install | 2>/dev/null
+  xcode-select --install 2>/dev/null || true
   ;;
 Linux)
   [ -r /etc/os-release ] && . /etc/os-release
@@ -251,14 +258,14 @@ pick_op_signing_key() {
   if has_gum; then
     local titles choice
     titles=$(echo "$items" | /usr/bin/python3 -c 'import json,sys
-for i in json.load(sys.stdin): print(f"{i[\"id\"]}\t{i[\"title\"]}")' 2>/dev/null)
+for i in json.load(sys.stdin): print("%s\t%s" % (i["id"], i["title"]))' 2>/dev/null)
     [ -z "$titles" ] && return 0
     choice=$(echo "$titles" | gum choose --header "Select 1Password SSH Key for git signing (esc to skip)") || return 0
     item_id=$(echo "$choice" | cut -f1)
   else
     echo "1Password SSH Keys:" >&2
     echo "$items" | /usr/bin/python3 -c 'import json,sys
-for i in json.load(sys.stdin): print(f"  {i[\"id\"]}  {i[\"title\"]}")' >&2
+for i in json.load(sys.stdin): print("  %s  %s" % (i["id"], i["title"]))' >&2
     read -r -p "Paste item id (blank to skip): " item_id </dev/tty
   fi
 
@@ -407,19 +414,24 @@ apply_uninstalls() {
   [ -f "$list" ] || return 0
   echo
   echo "-- Applying $list --"
-  local kind id removed=0
+  local kind id removed=0 formulae="" casks=""
+  # List installed formulae/casks once rather than per uninstall.list entry.
+  if command -v brew >/dev/null 2>&1; then
+    formulae=$(brew list --formula 2>/dev/null)
+    casks=$(brew list --cask 2>/dev/null)
+  fi
   while IFS= read -r line; do
     [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
     read -r kind id _rest <<<"$line"
     case "$kind" in
       brew)
-        if brew list --formula 2>/dev/null | grep -qx "$id"; then
+        if grep -qx "$id" <<<"$formulae"; then
           echo "  uninstalling brew $id"
           brew uninstall --ignore-dependencies "$id" >/dev/null 2>&1 && removed=$((removed + 1))
         fi
         ;;
       cask)
-        if brew list --cask 2>/dev/null | grep -qx "$id"; then
+        if grep -qx "$id" <<<"$casks"; then
           echo "  uninstalling cask $id"
           brew uninstall --cask "$id" >/dev/null 2>&1 && removed=$((removed + 1))
         fi

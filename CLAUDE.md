@@ -8,7 +8,7 @@ Personal dotfiles for macOS and Ubuntu Linux. Configs are deployed via GNU Stow;
 
 ## Install / deploy
 
-- `./install` — OS-detects, installs prerequisites, stows `dots/.config` into `~/.config`, marks `.aws`/`.ssh` as `assume-unchanged`.
+- `./install` — OS-detects, installs prerequisites, stows `dots/.config` into `~/.config` and `dots/.claude` into `~/.claude`, links a curated list of HOME dotfiles and every `dots/bin/*` into `~/bin`, marks `.ssh` as `assume-unchanged`. It `cd`s to its own directory, so it can be run from anywhere.
   - **macOS**: xcode-select, Homebrew, `brew bundle install --global`.
   - **Linux**: detects distro family via `/etc/os-release`.
     - **Arch / CachyOS** (`install_arch`): native only — `pacman -Syu`, bootstraps `paru` if missing, adds the Flathub remote, then installs from `packages/pacman.txt` (repos), `packages/aur.txt` (AUR via paru), and `packages/flatpak.txt` (Flathub). **No Homebrew.** Lists hold an essentials set only.
@@ -21,14 +21,14 @@ Personal dotfiles for macOS and Ubuntu Linux. Configs are deployed via GNU Stow;
 
 ## Layout that matters
 
-- `dots/` is the Stow source tree. Only `dots/.config` is stowed by `install` (`stow -t ~/.config ./.config`). Other top-level files under `dots/` (`.zshrc`, `.gitconfig`, `.aliases`, `.Brewfile`, `.vimrc`, `.profile`, `.ssh/`, `.aws/`, `.gnupg/`, `bin/`) are **not** auto-linked — they either live where Stow/tools expect via `$HOME` conventions or must be symlinked manually. When adding a new config, prefer placing it under `dots/.config/<app>/` so it gets picked up automatically.
+- `dots/` is the Stow source tree. `install` stows `dots/.config` → `~/.config` and `dots/.claude` → `~/.claude` (the `.claude` stow aborts if a real `~/.claude/settings.json` exists). HOME-level dotfiles are symlinked from the explicit list in `link_home_file` (`.zshenv .zshrc .zprofile .profile .aliases .vimrc .gitconfig*`, plus `.Brewfile` where brew exists) — add new ones to that list. `dots/bin/*` is linked into `~/bin`. `.ssh/`, `.aws/`, `.gnupg/` are never linked. When adding a new config, prefer placing it under `dots/.config/<app>/` so it gets picked up automatically.
 - `dots/.Brewfile` is the global Brewfile (`brew bundle --global` reads `~/.Brewfile`).
 - `dots/bin/` contains helper scripts referenced by shell config (e.g. `upfind` is used by the `aws_auto_profile_hook` in `.zshrc`).
 - `dots/.gitconfig` includes OS-specific files (`.gitconfig-mac`, `.gitconfig-linux`, `.gitconfig-work`) — platform branching lives there, not in the main gitconfig.
 
 ## Secrets hygiene
 
-- `.aws/` and `.ssh/` are checked in but marked `git update-index --assume-unchanged` by `install`. To intentionally commit changes to them, run `git update-index --no-assume-unchanged ./dots/.aws/**` (or `.ssh`) first.
+- `dots/.aws/` is gitignored. `.ssh/` is checked in but marked `git update-index --assume-unchanged` by `install`; to intentionally commit changes to it, run `git update-index --no-assume-unchanged ./dots/.ssh/**` first.
 - Stow's `--adopt` can pull secret files into the repo — avoid it, especially near `.ssh`.
 
 ## Local overlays
