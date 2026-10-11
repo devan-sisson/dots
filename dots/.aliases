@@ -14,4 +14,17 @@ if [ "$(uname)" = "Linux" ] && command -v xdg-open >/dev/null 2>&1; then
   open() { xdg-open "${@:-.}" >/dev/null 2>&1 & disown; }
 fi
 
+# `git wt` (~/bin/git-wt) prints a worktree path; a child process can't move the
+# shell, so intercept it here and cd. Every other subcommand passes through.
+git() {
+  if [ "$1" = "wt" ]; then
+    shift
+    local dir
+    dir=$(command git wt "$@") || return
+    [ -n "$dir" ] && cd "$dir"
+  else
+    command git "$@"
+  fi
+}
+
 [ -f "$HOME/.aliases.local" ] && source "$HOME/.aliases.local"

@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# git-wt — fzf picker for the worktrees of the current repo.
+# Prints the chosen worktree's root path on stdout. A process can't change its
+# parent shell's directory, so the `git` wrapper in ~/.aliases turns
+# `git wt` into a `cd`.
+#
+# Usage:
+#   git wt            pick a worktree (the main worktree is always listed first)
+#   git wt root       print the main worktree (the project root) without a picker
+#   git wt [query]    pick, with the fzf query prefilled
+
+if ! command -v fzf >/dev/null 2>&1; then
+  echo "git-wt requires fzf. Install it with: brew install fzf" >&2
+  exit 1
+fi
+
+git rev-parse --git-dir >/dev/null 2>&1 || {
+  echo "git-wt: not inside a git repository" >&2
+  exit 1
+}
+
+# The first entry of `git worktree list` is always the main worktree.
+main=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
+
+# Preview pane: changed files, then recent commits, both in color.
+if [ "${1:-}" = "--preview" ]; then
+  dir=$2
+  bold=$'\e[1m' dim=$'\e[2m' reset=$'\e[0m'
+  printf '%sChanged files%s\n' "$bold" "$reset"
+  changes=$(git -C "$dir" -c color.status=always status --short 2>/dev/null)
+  if [ -n "$changes" ]; then printf '%s\n' "$changes"; else printf '%s  clean%s\n' "$dim" "$reset"; fi
+  printf '\n%sCommits%s\n' "$bold" "$reset"
+  git -C "$dir" log --color=always -20 \
+    --format='%C(yellow)%h%C(reset) %s %C(dim)%cr%C(reset)' 2>/dev/null
+  exit 0
+fi
+
+if [ "${1:-}" = "root" ]; then
+  printf '%s\n' "$main"
+  exit 0
+fi
+
+current=$(git rev-parse --show-toplevel 2>/dev/null || true)
+
+# One line per worktree: path <TAB> colored label, where label is
+# "<marker> [root] <branch>  <~/path> [flags]". fzf shows only the label.
+rows=$(git worktree list --porcelain | awk -v main="$main" -v cur="$current" -v home="$HOME" '
+  function flush() {
+    if (path == "") return
+    mark = (path == cur) ? "\033[32m●\033[0m" : " "
+    root = (path == main) ? "\033[35m[root]\033[0m " : ""
+    short = path
+    if (index(short, home) == 1) short = "~" substr(short, length(home) + 1)
+    printf "%s\t%s %s\033[1;36m%s\033[0m  \033[2m%s\033[0m%s\n", path, mark, root, br, short, flags
+    path = ""; br = ""; flags = ""
+  }
+  /^worktree /  { flush(); path = substr($0, 10) }
+  /^branch /    { br = substr($0, 8); sub("^refs/heads/", "", br) }
+  /^detached$/  { br = "(detached)" }
+  /^bare$/      { br = "(bare)" }
+  /^locked/     { flags = flags "  \033[33m[locked]\033[0m" }
+  /^prunable/   { flags = flags "  \033[31m[prunable]\033[0m" }
+  END           { flush() }
+')
+
+selected=$(printf '%s\n' "$rows" | fzf \
+  --select-1 \
+  --exit-0 \
+  --no-sort \
+  --ansi \
+  --delimiter='\t' \
+  --with-nth=2 \
+  --header 'ENTER: go to worktree   CTRL-R: go to project root   ESC: quit   (● = current)' \
+  --prompt 'worktree> ' \
+  --query "${1:-}" \
+  --bind "ctrl-r:become(printf '%s\n' '$main')" \
+  --preview "\"$0\" --preview {1}" \
+  --preview-window 'right,50%,wrap') || exit 0
+
+printf '%s\n' "${selected%%$'\t'*}"
