@@ -1,0 +1,7 @@
+{
+  "name": "pr-status",
+  "version": "0.2.0",
+  "description": "Tracks every PR a session opens and shows its live merge, review, CI and conflict status, plus each worktree's push state",
+  "author": { "name": "Colten Rouska" },
+  "types": "./types/index.d.ts"
+}
